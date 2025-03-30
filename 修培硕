@@ -1,0 +1,90 @@
+#include <Servo.h>
+
+Servo lockServo;
+const int buzzerPin = 9;
+const int servoPin = 10;
+const int buttonPins[] = {2,3,4,5,6,7,8,11,12,13}; // 按钮对应引脚2-11（数字0-9）
+const int password[] = {1,2,3,4,5}; // 预设密码
+
+int inputBuffer[5];
+int inputIndex = 0;
+int errorCount = 0;
+bool isLocked = false;
+
+void setup() {
+  Serial.begin(9600);  //初始化串口通信
+  for (int i = 0; i < 11; i++) {
+    pinMode(buttonPins[i], INPUT_PULLUP);
+  }
+  lockServo.attach(servoPin);
+  pinMode(buzzerPin, OUTPUT);
+  lockServo.write(0);
+}
+
+void loop() {
+  if (isLocked) {
+    tone(buzzerPin, 1000);
+    return;
+  }
+
+  int pressedNum = -1;
+  // 扫描按键输入
+  for (int i = 0; i < 10; i++) {
+    if (digitalRead(buttonPins[i]) == LOW) {
+      delay(20);
+      if (digitalRead(buttonPins[i]) == LOW) {
+        pressedNum = i;
+        Serial.print("Pressed: ");     // 实时按键反馈
+        Serial.println(pressedNum);   // 显示实际按下的数字
+        while (digitalRead(buttonPins[i]) == LOW);
+        delay(20);
+        break;
+      }
+    }
+  }
+
+  // 处理有效输入
+  if (pressedNum != -1 && inputIndex < 5) {
+    inputBuffer[inputIndex++] = pressedNum;
+  }
+
+  // 密码验证
+  if (inputIndex == 5) {
+    //打印完整输入序列
+    Serial.print("Input Sequence: ");
+    for (int i = 0; i < 5; i++) {
+      Serial.print(inputBuffer[i]);
+      Serial.print(" ");
+    }
+    Serial.println();
+
+    bool isCorrect = true;
+    for (int i = 0; i < 5; i++) {
+      if (inputBuffer[i] != password[i]) {
+        isCorrect = false;
+        break;
+      }
+    }
+
+    if (isCorrect) {
+      Serial.println("Door Opened!");  // 开锁提示
+      lockServo.write(90);
+      delay(3000);
+      lockServo.write(0);
+      errorCount = 0;
+    } else {
+      Serial.print("Wrong Password! Errors: ");  // 错误计数
+      Serial.println(errorCount+1);
+      errorCount++;
+      if (errorCount >= 3) {
+        isLocked = true;
+       tone(buzzerPin,1000,500);
+       delay(1000);
+       tone(buzzerPin,2000,5000);
+       
+        Serial.println("System Locked!");  // 锁定提示
+      }
+    }
+    inputIndex = 0;
+  }
+}
